@@ -25,10 +25,14 @@ export default function PointsManagement() {
   const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false)
   const [successData, setSuccessData] = useState<any>(null)
 
+  // 🆕 Audit Log
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+
+  // 🔧 Sau này BE sẽ xác định nhân viên đang đăng nhập từ token/session
+  const currentEmployee = { id: "EMP001", name: "Nguyễn Thị B" }
+
   const formatNumber = (value: string) => {
-    // Remove all non-digits
     const numericValue = value.replace(/\D/g, "")
-    // Add thousand separators
     return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
   }
 
@@ -41,9 +45,8 @@ export default function PointsManagement() {
 
     setIsLoading(true)
 
-    // Simulate API call to fetch customer
+    // 🔧 Sẽ thay bằng API thật để tìm kiếm khách hàng
     setTimeout(() => {
-      // Mock customer data
       setCustomer({
         id: "CUS12345",
         name: "Nguyễn Văn A",
@@ -61,9 +64,8 @@ export default function PointsManagement() {
     const formattedValue = formatNumber(value)
     setInvoiceAmount(formattedValue)
 
-    // Calculate points based on invoice amount (example: 1 point per 10,000 VND)
     const amount = parseNumber(formattedValue)
-    setPointsToAdd(Math.floor(amount / 10000))
+    setPointsToAdd(Math.floor(amount / 10000)) // 🔧 Sau này công thức sẽ lấy từ BE
   }
 
   const handleAddPoints = () => {
@@ -72,16 +74,24 @@ export default function PointsManagement() {
     setIsLoading(true)
     const currentTime = new Date().toLocaleString("vi-VN")
 
-    // Simulate API call to add points
+    // 🔧 Sẽ thay bằng API call để tích điểm + ghi log ở BE
     setTimeout(() => {
-      setSuccessData({
+      const newLog = {
+        employeeId: currentEmployee.id,
+        employeeName: currentEmployee.name,
+        customerId: customer.id,
         customerName: customer.name,
-        pointsAdded: pointsToAdd,
-        invoiceNumber: invoiceNumber,
+        invoiceNumber,
         amount: parseNumber(invoiceAmount),
+        pointsAdded: pointsToAdd,
         timestamp: currentTime,
-        notes: notes,
-      })
+        notes,
+      }
+
+      // 🆕 Ghi lại audit log tại client (sau này chuyển về DB)
+      setAuditLogs((prev) => [...prev, newLog])
+
+      setSuccessData(newLog)
       setIsSuccessDialogOpen(true)
       setIsLoading(false)
     }, 1000)
@@ -105,6 +115,7 @@ export default function PointsManagement() {
         <p className="text-muted-foreground">Tích điểm cho khách hàng dựa trên giá trị hóa đơn</p>
       </div>
 
+      {/* --- Tìm kiếm khách hàng --- */}
       <Card>
         <CardHeader>
           <CardTitle>Tìm kiếm khách hàng</CardTitle>
@@ -158,6 +169,7 @@ export default function PointsManagement() {
         </CardContent>
       </Card>
 
+      {/* --- Thông tin khách hàng + form tích điểm --- */}
       {customer && (
         <Card>
           <CardHeader>
@@ -266,6 +278,7 @@ export default function PointsManagement() {
         </Card>
       )}
 
+      {/* --- Dialog thông báo thành công --- */}
       <Dialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -314,6 +327,44 @@ export default function PointsManagement() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* --- 🆕 Bảng Audit Log --- */}
+      {auditLogs.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Lịch sử tích điểm (Audit Log)</CardTitle>
+            <CardDescription>Ghi nhận lại tất cả giao dịch tích điểm</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-100 text-left">
+                  <th className="p-2 border">Thời gian</th>
+                  <th className="p-2 border">Nhân viên</th>
+                  <th className="p-2 border">Khách hàng</th>
+                  <th className="p-2 border">Mã hóa đơn</th>
+                  <th className="p-2 border">Giá trị</th>
+                  <th className="p-2 border">Điểm cộng</th>
+                  <th className="p-2 border">Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs.map((log, idx) => (
+                  <tr key={idx} className="border-t">
+                    <td className="p-2 border">{log.timestamp}</td>
+                    <td className="p-2 border">{log.employeeName}</td>
+                    <td className="p-2 border">{log.customerName}</td>
+                    <td className="p-2 border">{log.invoiceNumber}</td>
+                    <td className="p-2 border">{log.amount.toLocaleString("vi-VN")} VNĐ</td>
+                    <td className="p-2 border text-pink-600">{log.pointsAdded}</td>
+                    <td className="p-2 border">{log.notes || "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
