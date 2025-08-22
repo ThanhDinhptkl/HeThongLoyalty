@@ -1,12 +1,17 @@
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    email: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
+const userSchema = new mongoose.Schema({
+  email: { type: String, unique: true, sparse: true },
+  phone: { type: String, unique: true, sparse: true },
+  password: { type: String },
+  provider: { type: String, default: "local" },
+  googleId: { type: String, unique: true, sparse: true },
+  role: {
+    type: String,
+    enum: ["customer", "partner", "admin"],
+    default: "customer",
   },
-  { timestamps: true }
-);
+  createdAt: { type: Date, default: Date.now },
+});
 
 export default mongoose.model("User", userSchema);
