@@ -1,24 +1,15 @@
-import { verifyJwt } from "../utils/jwt.js";
+import supabase from "../config/supabaseClient.js";
 
-export const verifyToken = (req, res, next) => {
-  const header = req.headers.authorization || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "NO_TOKEN" });
+export const verifyToken = async (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
 
-  try {
-    const payload = verifyJwt(token);
-    req.user = { id: payload.id, role: payload.role };
-    return next();
-  } catch {
-    return res.status(401).json({ error: "INVALID_TOKEN" });
-  }
-};
+  if (!token) return res.status(401).json({ error: "No token provided" });
 
-export const requireRoles = (...roles) => {
-  return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: "NO_USER" });
-    if (!roles.includes(req.user.role))
-      return res.status(403).json({ error: "FORBIDDEN" });
-    return next();
-  };
+  const { data, error } = await supabase.auth.getUser(token);
+
+  if (error || !data.user)
+    return res.status(401).json({ error: "Invalid token" });
+
+  req.user = data.user;
+  next();
 };
