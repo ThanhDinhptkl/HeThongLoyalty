@@ -7,12 +7,13 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabaseClient"
 
-interface LoginModalProps {
-  onLogin: (userData: { name: string; id: string; points: number }) => void
+interface SignupModalProps {
+  onSignup: (userData: { name: string; id: string; points: number }) => void
 }
 
-export default function LoginModal({ onLogin }: LoginModalProps) {
-  const [phoneOrEmail, setPhoneOrEmail] = useState("")
+export default function SignupModal({ onSignup }: SignupModalProps) {
+  const [fullName, setFullName] = useState("")
+  const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
@@ -21,16 +22,17 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
     setIsLoading(true)
 
     try {
-      // 👉 Gọi Supabase Auth API
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: phoneOrEmail,
-        // Nếu login bằng phone: đổi field này thành "phone: phoneOrEmail"
-        password: password,
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName }, // metadata
+        },
       })
 
       if (error) {
-        console.error("Đăng nhập lỗi:", error.message)
-        alert("Sai thông tin đăng nhập, vui lòng thử lại")
+        console.error("Đăng ký lỗi:", error.message)
+        alert("Không thể đăng ký, vui lòng thử lại")
         return
       }
 
@@ -40,7 +42,8 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
           id: data.user.id,
           points: 0, // TODO: sau này query từ bảng loyalty_points
         }
-        onLogin(userData)
+        onSignup(userData)
+        alert("Đăng ký thành công! Vui lòng kiểm tra email để xác nhận.")
       }
     } finally {
       setIsLoading(false)
@@ -50,19 +53,30 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl text-center">Đăng nhập</CardTitle>
-        <CardDescription className="text-center">Đăng nhập để xem điểm tích lũy và ưu đãi</CardDescription>
+        <CardTitle className="text-xl text-center">Đăng ký</CardTitle>
+        <CardDescription className="text-center">Tạo tài khoản để bắt đầu tích điểm và nhận ưu đãi</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="phoneOrEmail">Số điện thoại hoặc Email</Label>
+            <Label htmlFor="fullName">Họ và tên</Label>
             <Input
-              id="phoneOrEmail"
+              id="fullName"
               type="text"
-              placeholder="0912345678 hoặc email@example.com"
-              value={phoneOrEmail}
-              onChange={(e) => setPhoneOrEmail(e.target.value)}
+              placeholder="Nguyễn Văn A"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="email@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
@@ -77,20 +91,15 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
             />
           </div>
           <Button type="submit" className="w-full bg-pink-600 hover:bg-pink-700" disabled={isLoading}>
-            {isLoading ? "Đang xử lý..." : "Đăng nhập"}
+            {isLoading ? "Đang xử lý..." : "Đăng ký"}
           </Button>
         </form>
       </CardContent>
       <CardFooter className="flex flex-col space-y-2">
         <div className="text-sm text-center text-gray-500">
-          Chưa có tài khoản?{" "}
+          Đã có tài khoản?{" "}
           <a href="#" className="text-pink-600 hover:underline">
-            Đăng ký ngay
-          </a>
-        </div>
-        <div className="text-sm text-center text-gray-500">
-          <a href="#" className="text-pink-600 hover:underline">
-            Quên mật khẩu?
+            Đăng nhập ngay
           </a>
         </div>
       </CardFooter>
