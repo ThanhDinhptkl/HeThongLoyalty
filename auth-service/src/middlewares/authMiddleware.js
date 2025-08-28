@@ -1,15 +1,20 @@
-import supabase from "../config/supabaseClient.js";
+import { sbAdmin } from "../config/supabaseClient.js";
 
-export const verifyToken = async (req, res, next) => {
-  const token = req.headers.authorization?.split(" ")[1];
+export async function requireAuth(req, res, next) {
+  try {
+    const token =
+      req.cookies["sb-access-token"] ||
+      (req.headers.authorization || "").replace("Bearer ", "");
 
-  if (!token) return res.status(401).json({ error: "No token provided" });
+    if (!token) return res.status(401).json({ error: "Unauthorized" });
 
-  const { data, error } = await supabase.auth.getUser(token);
+    const { data, error } = await sbAdmin.auth.getUser(token);
+    if (error) return res.status(401).json({ error: "Invalid token" });
 
-  if (error || !data.user)
-    return res.status(401).json({ error: "Invalid token" });
-
-  req.user = data.user;
-  next();
-};
+    req.user = data.user;
+    next();
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "Server error" });
+  }
+}
