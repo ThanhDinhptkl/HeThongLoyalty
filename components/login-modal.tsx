@@ -1,46 +1,52 @@
+// components/login-modal.tsx (hoặc file bạn đang dùng)
 "use client"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { supabase } from "@/lib/supabaseClient"
 
-interface LoginModalProps {
-  onLogin: (userData: { name: string; id: string; points: number }) => void
-}
+const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000";
+
+type LoginModalProps = {
+  onLogin: (user: { name: string; id: string | number; points: number }) => void;
+};
 
 export default function LoginModal({ onLogin }: LoginModalProps) {
-  const [phoneOrEmail, setPhoneOrEmail] = useState("")
+  const [identifier, setIdentifier] = useState("") // email hoặc phone
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault()
     setIsLoading(true)
-
     try {
-      // 👉 Gọi Supabase Auth API
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: phoneOrEmail,
-        // Nếu login bằng phone: đổi field này thành "phone: phoneOrEmail"
-        password: password,
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // <- để nhận cookie từ BE
+        body: JSON.stringify({ identifier, password }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Login failed")
+
+      onLogin({
+        name: json.user?.full_name || "Khách hàng",
+        id: json.user?.id,
+        points: 0,
       })
 
-      if (error) {
-        console.error("Đăng nhập lỗi:", error.message)
-        alert("Sai thông tin đăng nhập, vui lòng thử lại")
-        return
-      }
-
-      if (data.user) {
-        const userData = {
-          name: data.user.user_metadata?.full_name || "Khách hàng",
-          id: data.user.id,
-          points: 0, // TODO: sau này query từ bảng loyalty_points
-        }
-        onLogin(userData)
+      // Redirect theo role
+      const role = json.user?.role
+      if (role === "admin") window.location.href = "/admin"
+      else if (role === "partner") window.location.href = "/partner"
+      else if (role === "super-admin") window.location.href = "/super-admin"
+      else window.location.href = "/"
+    } catch (err) {
+      if (err instanceof Error) {
+        alert(err.message)
+      } else {
+        alert("Đăng nhập thất bại")
       }
     } finally {
       setIsLoading(false)
@@ -56,25 +62,12 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="phoneOrEmail">Số điện thoại hoặc Email</Label>
-            <Input
-              id="phoneOrEmail"
-              type="text"
-              placeholder="0912345678 hoặc email@example.com"
-              value={phoneOrEmail}
-              onChange={(e) => setPhoneOrEmail(e.target.value)}
-              required
-            />
+            <Label htmlFor="identifier">Email hoặc SĐT</Label>
+            <Input id="identifier" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Mật khẩu</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <Button type="submit" className="w-full bg-pink-600 hover:bg-pink-700" disabled={isLoading}>
             {isLoading ? "Đang xử lý..." : "Đăng nhập"}
@@ -82,17 +75,7 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
         </form>
       </CardContent>
       <CardFooter className="flex flex-col space-y-2">
-        <div className="text-sm text-center text-gray-500">
-          Chưa có tài khoản?{" "}
-          <a href="#" className="text-pink-600 hover:underline">
-            Đăng ký ngay
-          </a>
-        </div>
-        <div className="text-sm text-center text-gray-500">
-          <a href="#" className="text-pink-600 hover:underline">
-            Quên mật khẩu?
-          </a>
-        </div>
+        {/* links phụ */}
       </CardFooter>
     </Card>
   )

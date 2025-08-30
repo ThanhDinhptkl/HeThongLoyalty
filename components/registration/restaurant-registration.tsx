@@ -12,6 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 
+const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000"
+
 export default function RestaurantRegistration() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -35,6 +37,14 @@ export default function RestaurantRegistration() {
       .replace(/\s+/g, "-")
       .trim()
   }
+//  hàm format số điện thoại về định dạng E.164
+const formatPhoneToE164 = (phone: string) => {
+  let cleaned = phone.replace(/\D/g, "") 
+  if (cleaned.startsWith("0")) {
+    cleaned = cleaned.substring(1)
+  }
+  return `+84${cleaned}`
+}
 
   const validateForm = () => {
     const newErrors: any = {}
@@ -87,18 +97,61 @@ export default function RestaurantRegistration() {
     }
 
     setIsLoading(true)
+    setErrors({}) // Clear previous errors
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/signup`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          restaurant_name: formData.restaurantName,
+          owner_name: formData.ownerName,
+          address: formData.address,
+          email: formData.email,
+          phone: formatPhoneToE164(formData.phone),  // Chuyển đổi định dạng số điện thoại về E.164
+          password: formData.password,
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        // Handle API errors
+        if (result.errors) {
+          // If backend returns a list of validation errors
+          const apiErrors: any = {}
+          result.errors.forEach((err: { field: string; message: string }) => {
+            // Mapping backend field names to frontend state names
+            const fieldName = err.field
+              .replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+              .replace(/^./, (str) => str.toLowerCase())
+            apiErrors[fieldName] = err.message
+          })
+          setErrors(apiErrors)
+        } else {
+          // Handle other general errors
+          setErrors({ form: result.error || "Đăng ký thất bại. Vui lòng thử lại." })
+        }
+        throw new Error(result.error || "Đăng ký thất bại.")
+      }
+
+      // API call was successful
       setIsSuccess(true)
       setIsLoading(false)
 
-      // Redirect to restaurant admin after 3 seconds
-      setTimeout(() => {
-        const slug = generateSlug(formData.restaurantName)
-        router.push(`/partner/${slug}`)
-      }, 3000)
-    }, 2000)
+      const slug = generateSlug(formData.restaurantName)
+      router.push(`/partner/${slug}`)
+
+    } catch (err) {
+      console.error("Registration error:", err)
+      if (!errors.form) {
+        // Show a general error if no specific errors were set
+        setErrors({ form: "Đăng ký thất bại. Vui lòng thử lại sau." })
+      }
+      setIsLoading(false)
+    }
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -107,7 +160,6 @@ export default function RestaurantRegistration() {
       [field]: value,
     }))
 
-    // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev: any) => ({
         ...prev,
@@ -115,7 +167,7 @@ export default function RestaurantRegistration() {
       }))
     }
   }
-
+  
   if (isSuccess) {
     return (
       <Card className="border-green-200 bg-green-50">
@@ -198,7 +250,6 @@ export default function RestaurantRegistration() {
                 <Building2 className="mr-2 h-5 w-5" />
                 Thông tin nhà hàng
               </h3>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="restaurantName">
@@ -228,7 +279,6 @@ export default function RestaurantRegistration() {
                   {errors.ownerName && <p className="text-sm text-red-500">{errors.ownerName}</p>}
                 </div>
               </div>
-
               <div className="space-y-2">
                 <Label htmlFor="address">
                   Địa chỉ nhà hàng <span className="text-red-500">*</span>
@@ -252,7 +302,6 @@ export default function RestaurantRegistration() {
                 <User className="mr-2 h-5 w-5" />
                 Thông tin liên hệ
               </h3>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">
@@ -271,7 +320,6 @@ export default function RestaurantRegistration() {
                   </div>
                   {errors.email && <p className="text-sm text-red-500">{errors.email}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="phone">
                     Số điện thoại <span className="text-red-500">*</span>
@@ -299,7 +347,6 @@ export default function RestaurantRegistration() {
                 <Lock className="mr-2 h-5 w-5" />
                 Bảo mật tài khoản
               </h3>
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="password">
@@ -315,7 +362,6 @@ export default function RestaurantRegistration() {
                   />
                   {errors.password && <p className="text-sm text-red-500">{errors.password}</p>}
                 </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">
                     Xác nhận mật khẩu <span className="text-red-500">*</span>
@@ -358,7 +404,8 @@ export default function RestaurantRegistration() {
               </div>
               {errors.agreeTerms && <p className="text-sm text-red-500">{errors.agreeTerms}</p>}
             </div>
-
+            {errors.form && <p className="text-sm text-red-500 text-center">{errors.form}</p>}
+            
             {/* Submit Button */}
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
               {isLoading ? "Đang tạo tài khoản..." : "Tạo tài khoản dùng thử miễn phí"}
