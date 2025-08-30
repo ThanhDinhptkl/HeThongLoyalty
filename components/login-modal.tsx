@@ -20,12 +20,21 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
   const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault()
     setIsLoading(true)
-    try {
+      let payload: any = { password }
+      if (identifier.includes("@")) {
+      payload.email = identifier
+      } else {
+      let phone = identifier.replace(/\D/g, "")
+      if (phone.startsWith("0")) phone = phone.substring(1)
+      payload.phone = `+84${phone}`
+      // payload.phone = phone
+      }
+   try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include", // <- để nhận cookie từ BE
-        body: JSON.stringify({ identifier, password }),
+        credentials: "include",
+        body: JSON.stringify(payload),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Login failed")
