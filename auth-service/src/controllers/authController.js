@@ -1,9 +1,5 @@
 import { sbAdmin, sbPublic, writeAudit } from "../config/supabaseClient.js";
-
-function normalizeIdentifier(identifier = "") {
-  const isEmail = identifier.includes("@");
-  return { isEmail, value: identifier.trim() };
-}
+import { normalizePhone, normalizeIdentifier } from "../utils/normalize.js";
 
 export async function signup(req, res) {
   try {
@@ -21,21 +17,25 @@ export async function signup(req, res) {
       return res.status(400).json({ error: "Thiếu email/phone hoặc password" });
     }
 
+    const normPhone = phone ? normalizePhone(phone) : undefined;
+
     const { data, error } = await sbAdmin.auth.admin.createUser({
       email: email || undefined,
+      phone: normPhone,
       password,
-      phone: phone || undefined,
       user_metadata: { full_name },
       email_confirm: !!email,
-      phone_confirm: !!phone,
+      phone_confirm: !!normPhone,
     });
 
     if (error) return res.status(400).json({ error: error.message });
 
     const user = data.user;
+
     await sbAdmin
       .from("profiles")
-      .insert([{ id: user.id, full_name, phone, role: "partner" }]);
+      .insert([{ id: user.id, full_name, phone: normPhone, role: "partner" }]);
+
     if (restaurant_name) {
       await sbAdmin.from("partners").insert([
         {
@@ -43,7 +43,7 @@ export async function signup(req, res) {
           restaurant_name,
           owner_name,
           address,
-          phone,
+          phone: normPhone,
           status: "trial",
         },
       ]);
@@ -53,7 +53,7 @@ export async function signup(req, res) {
       user_id: user.id,
       action: "signup",
       resource: "auth",
-      metadata: { email, phone, restaurant_name },
+      metadata: { email, phone: normPhone, restaurant_name },
     });
 
     return res.json({ ok: true, user: { id: user.id, email: user.email } });
@@ -65,20 +65,22 @@ export async function signup(req, res) {
 
 export async function login(req, res) {
   try {
-    const { identifier, password } = req.body;
-    if (!identifier || !password)
+    const { identifier, email, phone, password } = req.body;
+    const id = identifier || email || phone;
+    if (!id || !password)
       return res.status(400).json({ error: "Thiếu thông tin đăng nhập" });
 
-    const { isEmail, value } = normalizeIdentifier(identifier);
+    const { isEmail, value } = normalizeIdentifier(id);
+    const phoneValue = !isEmail ? normalizePhone(value) : undefined;
 
     const { data, error } = await sbPublic.auth.signInWithPassword(
-      isEmail ? { email: value, password } : { phone: value, password }
+      isEmail ? { email: value, password } : { phone: phoneValue, password }
     );
+
     if (error)
       return res.status(401).json({ error: "Sai thông tin đăng nhập" });
 
     const { session, user } = data;
-
     const { data: profile } = await sbAdmin
       .from("profiles")
       .select("*")
@@ -116,6 +118,7 @@ export async function login(req, res) {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         role: profile?.role,
         full_name: user.user_metadata?.full_name,
       },
@@ -144,7 +147,7 @@ export async function me(req, res) {
       .eq("id", user.id)
       .single();
 
-    return res.json({ user, profile });
+    return res.json({ ok: true, user, profile });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Server error" });
@@ -157,7 +160,7 @@ export async function logout(req, res) {
       .clearCookie("sb-access-token", { path: "/" })
       .clearCookie("sb-refresh-token", { path: "/" });
 
-    return res.json({ ok: true });
+    return res.json({ ok: true, message: "Đăng xuất thành công" });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: "Server error" });
