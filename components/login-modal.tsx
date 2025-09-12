@@ -1,62 +1,70 @@
-// components/login-modal.tsx (hoặc file bạn đang dùng)
 "use client"
+
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Eye, EyeOff } from "lucide-react"
 
-const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000"
 
 type LoginModalProps = {
-  onLogin: (user: { name: string; id: string | number; points: number }) => void;
-};
+  onLogin: (user: { name: string; id: string | number; points: number }) => void
+}
 
 export default function LoginModal({ onLogin }: LoginModalProps) {
-  const [identifier, setIdentifier] = useState("") // email hoặc phone
+  const [identifier, setIdentifier] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const router = useRouter()
 
-  const handleSubmit = async (e: { preventDefault: () => void }) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
-      let payload: any = { password }
-      if (identifier.includes("@")) {
-      payload.email = identifier
-      } else {
-      let phone = identifier.replace(/\D/g, "")
-      if (phone.startsWith("0")) phone = phone.substring(1)
-      payload.phone = `+84${phone}`
-      // payload.phone = phone
-      }
-   try {
+
+    try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ identifier, password }),
       })
+
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error || "Login failed")
+      if (!res.ok) {
+        throw new Error(json.error || "Đăng nhập thất bại")
+      }
+
+      if (!json.user) {
+        throw new Error("Phản hồi không hợp lệ từ server")
+      }
 
       onLogin({
-        name: json.user?.full_name || "Khách hàng",
-        id: json.user?.id,
-        points: 0,
+        name: json.user.full_name || "Khách hàng",
+        id: json.user.id,
+        points: json.user.points || 0,
       })
 
       // Redirect theo role
-      const role = json.user?.role
-      if (role === "admin") window.location.href = "/admin"
-      else if (role === "partner") window.location.href = "/partner"
-      else if (role === "super-admin") window.location.href = "/super-admin"
-      else window.location.href = "/"
+      const role = json.user.role
+      if (role === "admin") router.push("/admin")
+      else if (role === "partner") router.push("/partner")
+      else if (role === "super-admin") router.push("/super-admin")
+      else router.push("/")
     } catch (err) {
-      if (err instanceof Error) {
-        alert(err.message)
-      } else {
-        alert("Đăng nhập thất bại")
-      }
+      const message =
+        err instanceof Error ? err.message : "Đăng nhập thất bại"
+      alert(message)
     } finally {
       setIsLoading(false)
     }
@@ -66,19 +74,47 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
     <Card className="w-full">
       <CardHeader>
         <CardTitle className="text-xl text-center">Đăng nhập</CardTitle>
-        <CardDescription className="text-center">Đăng nhập để xem điểm tích lũy và ưu đãi</CardDescription>
+        <CardDescription className="text-center">
+          Đăng nhập để xem điểm tích lũy và ưu đãi
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="identifier">Email hoặc SĐT</Label>
-            <Input id="identifier" value={identifier} onChange={(e) => setIdentifier(e.target.value)} required />
+            <Input
+              id="identifier"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              required
+            />
           </div>
-          <div className="space-y-2">
+
+          <div className="space-y-2 relative">
             <Label htmlFor="password">Mật khẩu</Label>
-            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
           </div>
-          <Button type="submit" className="w-full bg-pink-600 hover:bg-pink-700" disabled={isLoading}>
+
+          <Button
+            type="submit"
+            className="w-full bg-pink-600 hover:bg-pink-700"
+            disabled={isLoading}
+          >
             {isLoading ? "Đang xử lý..." : "Đăng nhập"}
           </Button>
         </form>
