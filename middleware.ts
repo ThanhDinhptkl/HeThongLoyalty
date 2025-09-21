@@ -1,82 +1,92 @@
+
+
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// ✅ Public paths: không cần đăng nhập
-const publicPaths = [
-  "/",
-  "/login",
-  "/signup",
-  "/register",
-  "/customer/register",
-  "/customer/login",
-];
+const publicPaths = ["/", "/login", "/signup", "/customer/login", "/customer/register"];
 
-// ✅ Middleware
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  console.log("🔵 [MIDDLEWARE] pathname:", pathname);
 
-  // Cho phép public routes
+  // ✅ Public route → cho qua
   if (publicPaths.some((p) => pathname.startsWith(p))) {
+    console.log("✅ [MIDDLEWARE] public → cho qua");
     return NextResponse.next();
   }
 
-  // Lấy token từ cookie Supabase
-  const token = req.cookies.get("sb-access-token");
-  if (!token) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  // 🚀 Lấy cookie
+  let token = req.cookies.get("sb-access-token")?.value;
+  let role = req.cookies.get("sb-user-role")?.value;
+
+  console.log("🔑 [MIDDLEWARE] token:", token ? "✅" : "❌", "| role:", role || "❌");
+
+  // Nếu thiếu token/role → thử fetch lại từ API (self-heal)
+  if (!token || !role) {
+    console.warn("⚠️ [MIDDLEWARE] thiếu token/role → gọi /auth/me để đồng bộ");
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000"}/auth/me`, {
+        headers: {
+          cookie: req.headers.get("cookie") || "",
+        },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        token = json?.session?.access_token;
+        role = json?.profile?.role;
+
+        if (token && role) {
+          console.log("✅ [MIDDLEWARE] Đã đồng bộ lại token/role =", role);
+
+          // Gắn lại cookie để các lần sau không cần fetch nữa
+          const resNext = NextResponse.next();
+          resNext.cookies.set("sb-access-token", token, { path: "/", httpOnly: true, sameSite: "lax" });
+          resNext.cookies.set("sb-user-role", role, { path: "/", httpOnly: true, sameSite: "lax" });
+          return resNext;
+        }
+      }
+
+      console.error("❌ [MIDDLEWARE] Không lấy được thông tin user từ /auth/me → redirect /login");
+      return redirectToLogin(req);
+    } catch (err) {
+      console.error("❌ [MIDDLEWARE] Lỗi fetch /auth/me:", err);
+      return redirectToLogin(req);
+    }
   }
 
-  // 📌 Parse JWT từ Supabase (giải mã role)
-  const userRole = await getUserRole(token.value);
-  if (!userRole) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+  // 🚀 Kiểm tra role-based access
+  if (pathname.startsWith("/customer") && role !== "customer") {
+    console.warn("🚫 [MIDDLEWARE] forbidden: yêu cầu role customer");
+    return forbidden();
+  }
+  if (pathname.startsWith("/admin") && !["admin", "super-admin"].includes(role)) {
+    console.warn("🚫 [MIDDLEWARE] forbidden: yêu cầu role admin/super-admin");
+    return forbidden();
+  }
+  if (pathname.startsWith("/super-admin") && role !== "super-admin") {
+    console.warn("🚫 [MIDDLEWARE] forbidden: yêu cầu role super-admin");
+    return forbidden();
   }
 
-  // ✅ Role-based access control
-  if (pathname.startsWith("/customer") && userRole !== "customer") {
-    return forbidden(req);
-  }
-  if (pathname.startsWith("/admin") && !["admin", "super-admin"].includes(userRole)) {
-    return forbidden(req);
-  }
-  if (pathname.startsWith("/super-admin") && userRole !== "super-admin") {
-    return forbidden(req);
-  }
-
+  console.log("✅ [MIDDLEWARE] Đã xác thực, cho qua");
   return NextResponse.next();
 }
 
-// ❌ Helper: Trả về 403 nếu không có quyền
-function forbidden(req: NextRequest) {
+function redirectToLogin(req: NextRequest) {
+  const url = req.nextUrl.clone();
+  url.pathname = "/login";
+  console.log("➡️ [MIDDLEWARE] Redirect đến:", url.toString());
+  return NextResponse.redirect(url);
+}
+
+function forbidden() {
+  console.log("❌ [MIDDLEWARE] Trả về 403 Forbidden");
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 }
 
-// ✅ Helper: Giải mã token để lấy role
-async function getUserRole(token: string): Promise<string | null> {
-  try {
-    const base64Url = token.split(".")[1];
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split("")
-        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
-        .join("")
-    );
-    const payload = JSON.parse(jsonPayload);
-
-    // Giả sử role được lưu trong `user_metadata.role` (Supabase)
-    return payload.user_metadata?.role || null;
-  } catch (err) {
-    console.error("Decode token error:", err);
-    return null;
-  }
-}
-
-// ✅ Config matcher
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
+

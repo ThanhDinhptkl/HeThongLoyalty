@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -12,63 +12,80 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Eye, EyeOff } from "lucide-react"
+} from "@/components/ui/card";
+import { Eye, EyeOff } from "lucide-react";
 
-const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000"
+const API_BASE = process.env.NEXT_PUBLIC_AUTH_API || "http://localhost:5000";
 
 type LoginModalProps = {
-  onLogin: (user: { name: string; id: string | number; points: number }) => void
-}
+  onLogin: (user: { name: string; id: string | number; points?: number }) => void;
+};
 
 export default function LoginModal({ onLogin }: LoginModalProps) {
-  const [identifier, setIdentifier] = useState("")
-  const [password, setPassword] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const router = useRouter()
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+    e.preventDefault();
+    setIsLoading(true);
 
     try {
       const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        credentials: "include", // bắt buộc để cookie HttpOnly từ server được gửi về
         body: JSON.stringify({ identifier, password }),
-      })
+      });
 
-      const json = await res.json()
+      const text = await res.text();
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error("Phản hồi không hợp lệ từ server");
+      }
+
       if (!res.ok) {
-        throw new Error(json.error || "Đăng nhập thất bại")
+        throw new Error(json.error || "Đăng nhập thất bại");
       }
 
-      if (!json.user) {
-        throw new Error("Phản hồi không hợp lệ từ server")
+      if (!json.user || !json.profile) {
+        throw new Error("Phản hồi thiếu thông tin user hoặc profile");
       }
 
+      // Cập nhật state của app bằng dữ liệu profile
       onLogin({
-        name: json.user.full_name || "Khách hàng",
-        id: json.user.id,
-        points: json.user.points || 0,
-      })
+        name: json.profile?.full_name || "Khách hàng",
+        id: json.profile?.id || json.user?.id || "",
+        points: json.profile?.points || 0,
+      });
 
-      // Redirect theo role
-      const role = json.user.role
-      if (role === "admin") router.push("/admin")
-      else if (role === "partner") router.push("/partner")
-      else if (role === "super-admin") router.push("/super-admin")
-      else router.push("/")
+      // Điều hướng theo role
+      switch (json.profile?.role) {
+        case "super-admin":
+          router.push("/super-admin");
+          break;
+        case "admin":
+          router.push("/admin");
+          break;
+        case "partner":
+          router.push("/partner");
+          break;
+        case "customer":
+          router.push("/customer");
+          break;
+        default:
+          router.push("/");
+      }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Đăng nhập thất bại"
-      alert(message)
+      alert(err instanceof Error ? err.message : "Đăng nhập thất bại");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   return (
     <Card className="w-full">
@@ -78,6 +95,7 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
           Đăng nhập để xem điểm tích lũy và ưu đãi
         </CardDescription>
       </CardHeader>
+
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -119,9 +137,8 @@ export default function LoginModal({ onLogin }: LoginModalProps) {
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="flex flex-col space-y-2">
-        {/* links phụ */}
-      </CardFooter>
+
+      <CardFooter className="flex flex-col space-y-2" />
     </Card>
-  )
+  );
 }
