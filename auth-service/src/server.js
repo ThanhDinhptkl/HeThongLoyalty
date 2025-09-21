@@ -1,26 +1,31 @@
 import express from "express";
-import dotenv from "dotenv";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import dotenv from "dotenv";
+
 import authRoutes from "./routes/authRoutes.js";
-import notificationRoutes from "./routes/notificationRoutes.js";
 
 dotenv.config();
+
 const app = express();
 
+// ✅ CORS: Cho phép frontend gọi API kèm credentials (cookie)
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
-    credentials: true,
+    origin: "http://localhost:3000", // địa chỉ frontend
+    credentials: true, // cho phép gửi cookie
   })
 );
+
+// ✅ Middleware parse JSON và cookie
 app.use(express.json());
 app.use(cookieParser());
 
+// ✅ Routes
 app.use("/auth", authRoutes);
-app.use("/notifications", notificationRoutes);
 
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Auth Service running on port ${PORT}`);
+  console.log(`🚀 Server is running at http://localhost:${PORT}`);
 });
