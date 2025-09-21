@@ -32,5 +32,6 @@ export default function Header({ userName, onLogout }: HeaderProps) {
         </div>
       </div>
     </header>
+    
   )
 }

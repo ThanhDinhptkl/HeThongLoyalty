@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 
 // ✅ Public paths: không cần đăng nhập
 const publicPaths = [
+  "/",
   "/login",
   "/signup",
   "/register",
